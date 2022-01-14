@@ -58,7 +58,8 @@ public static class RelationalPropertyExtensions
                     return null;
                 }
             }
-            else if (StoreObjectIdentifier.Create(property.DeclaringEntityType, storeObject.StoreObjectType) != storeObject)
+            else if (property.DeclaringEntityType.GetMappingStrategy() != RelationalAnnotationNames.TpcMappingStrategy
+                && StoreObjectIdentifier.Create(property.DeclaringEntityType, storeObject.StoreObjectType) != storeObject)
             {
                 return null;
             }

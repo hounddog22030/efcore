@@ -89,6 +89,7 @@ public static class RelationalEventId
         ForeignKeyPropertiesMappedToUnrelatedTables,
         OptionalDependentWithoutIdentifyingPropertyWarning,
         DuplicateColumnOrders,
+        ForeignKeyTPCPrincipal,
 
         // Update events
         BatchReadyForExecution = CoreEventId.RelationalBaseId + 700,
@@ -738,6 +739,20 @@ public static class RelationalEventId
     /// </remarks>
     public static readonly EventId ForeignKeyPropertiesMappedToUnrelatedTables =
         MakeValidationId(Id.ForeignKeyPropertiesMappedToUnrelatedTables);
+
+    /// <summary>
+    ///     A foreign key specifies properties which don't map to the related tables.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         This event is in the <see cref="DbLoggerCategory.Model.Validation" /> category.
+    ///     </para>
+    ///     <para>
+    ///         This event uses the <see cref="ForeignKeyEventData" /> payload when used with a <see cref="DiagnosticSource" />.
+    ///     </para>
+    /// </remarks>
+    public static readonly EventId ForeignKeyTPCPrincipal =
+        MakeValidationId(Id.ForeignKeyTPCPrincipal);    
 
     /// <summary>
     ///     The entity does not have any property with a non-default value to identify whether the entity exists.

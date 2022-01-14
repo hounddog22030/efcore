@@ -1051,6 +1051,11 @@ public class RelationalModelValidator : ModelValidator
             var foreignKeyName = foreignKey.GetConstraintName(storeObject, principalTable.Value);
             if (foreignKeyName == null)
             {
+                if (foreignKey.PrincipalEntityType.GetMappingStrategy() == RelationalAnnotationNames.TpcMappingStrategy)
+                {
+                    logger.ForeignKeyTPCPrincipal(foreignKey);
+                }
+
                 var derivedTables = foreignKey.DeclaringEntityType.GetDerivedTypes()
                     .Select(t => StoreObjectIdentifier.Create(t, StoreObjectType.Table))
                     .Where(t => t != null);
@@ -1240,31 +1245,85 @@ public class RelationalModelValidator : ModelValidator
         IModel model,
         IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
     {
-        foreach (var rootEntityType in model.GetEntityTypes())
+        foreach (var entityType in model.GetEntityTypes())
         {
-            if (rootEntityType.BaseType != null)
+            var mappingStrategy = (string?)entityType[RelationalAnnotationNames.MappingStrategy];
+            if (mappingStrategy != null)
             {
+                ValidateMappingStrategy(mappingStrategy, entityType);
+                if (mappingStrategy == RelationalAnnotationNames.TpcMappingStrategy
+                    && entityType.ClrType.IsInstantiable())
+                {
+                    throw new InvalidOperationException(
+                       RelationalStrings.AbstractTPC(entityType.DisplayName(), mappingStrategy));
+                }
+            }
+
+            if (entityType.BaseType != null)
+            {
+                if (mappingStrategy != null
+                    && mappingStrategy != entityType.BaseType.GetMappingStrategy())
+                {
+                    throw new InvalidOperationException(
+                       RelationalStrings.DerivedStrategy(entityType.DisplayName(), mappingStrategy));
+                }
+
                 continue;
             }
 
             // Hierarchy mapping strategy must be the same across all types of mappings
-            var isTph = rootEntityType.FindPrimaryKey() == null
-                || rootEntityType.FindDiscriminatorProperty() != null;
+            var isTph = entityType.FindPrimaryKey() == null
+                || entityType.FindDiscriminatorProperty() != null;
             if (isTph)
             {
-                ValidateTPHMapping(rootEntityType, forTables: false);
-                ValidateTPHMapping(rootEntityType, forTables: true);
-                ValidateDiscriminatorValues(rootEntityType);
+                if (mappingStrategy != null
+                    && mappingStrategy != RelationalAnnotationNames.TphMappingStrategy)
+                {
+                    if (entityType.FindPrimaryKey() == null)
+                    {
+                        throw new InvalidOperationException(
+                           RelationalStrings.KeylessMappingStrategy(mappingStrategy, entityType.DisplayName()));
+                    }
+
+                    if (entityType.FindDiscriminatorProperty() != null)
+                    {
+                        throw new InvalidOperationException(
+                           RelationalStrings.NonTphMappingStrategy(mappingStrategy, entityType.DisplayName()));
+                    }
+                }
+
+                ValidateTPHMapping(entityType, forTables: false);
+                ValidateTPHMapping(entityType, forTables: true);
+                ValidateDiscriminatorValues(entityType);
             }
             else
             {
-                ValidateTPTMapping(rootEntityType, forTables: false);
-                ValidateTPTMapping(rootEntityType, forTables: true);
+                ValidateNonTPHMapping(entityType, forTables: false);
+                ValidateNonTPHMapping(entityType, forTables: true);
             }
         }
     }
 
-    private static void ValidateTPTMapping(IEntityType rootEntityType, bool forTables)
+    /// <summary>
+    ///     Validates that the given mapping strategy is supported
+    /// </summary>
+    /// <param name="mappingStrategy">The mapping strategy.</param>
+    /// <param name="entityType">The entity type.</param>
+    protected virtual void ValidateMappingStrategy(string? mappingStrategy, IEntityType entityType)
+    {
+        switch (mappingStrategy)
+        {
+            case RelationalAnnotationNames.TphMappingStrategy:
+            case RelationalAnnotationNames.TpcMappingStrategy:
+            case RelationalAnnotationNames.TptMappingStrategy:
+                break;
+            default:
+                throw new InvalidOperationException(RelationalStrings.InvalidMappingStrategy(
+                    mappingStrategy, entityType.DisplayName()));
+        };
+    }
+
+    private static void ValidateNonTPHMapping(IEntityType rootEntityType, bool forTables)
     {
         var derivedTypes = new Dictionary<(string, string?), IEntityType>();
         foreach (var entityType in rootEntityType.GetDerivedTypesInclusive())

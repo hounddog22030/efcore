@@ -2832,6 +2832,63 @@ public static class RelationalLoggerExtensions
     }
 
     /// <summary>
+    ///     Logs the <see cref="RelationalEventId.ForeignKeyTPCPrincipal" /> event.
+    /// </summary>
+    /// <param name="diagnostics">The diagnostics logger to use.</param>
+    /// <param name="foreignKey">The foreign key.</param>
+    public static void ForeignKeyTPCPrincipal(
+        this IDiagnosticsLogger<DbLoggerCategory.Model.Validation> diagnostics,
+        IForeignKey foreignKey)
+    {
+        var definition = RelationalResources.LogForeignKeyTPCPrincipal(diagnostics);
+
+        if (diagnostics.ShouldLog(definition))
+        {
+            definition.Log(
+                diagnostics,
+                l => l.Log(
+                    definition.Level,
+                    definition.EventId,
+                    definition.MessageFormat,
+                    foreignKey.Properties.Format(),
+                    foreignKey.DeclaringEntityType.DisplayName(),
+                    foreignKey.PrincipalEntityType.DisplayName(),
+                    foreignKey.PrincipalEntityType.DisplayName(),
+                    foreignKey.PrincipalEntityType.GetSchemaQualifiedTableName()!,
+                    foreignKey.DeclaringEntityType.DisplayName(),
+                    foreignKey.PrincipalEntityType.DisplayName()));
+        }
+
+        if (diagnostics.NeedsEventData(definition, out var diagnosticSourceEnabled, out var simpleLogEnabled))
+        {
+            var eventData = new ForeignKeyEventData(
+                definition,
+                ForeignKeyTPCPrincipal,
+                foreignKey);
+
+            diagnostics.DispatchEventData(definition, eventData, diagnosticSourceEnabled, simpleLogEnabled);
+        }
+    }
+
+    private static string ForeignKeyTPCPrincipal(EventDefinitionBase definition, EventData payload)
+    {
+        var d = (FallbackEventDefinition)definition;
+        var p = (ForeignKeyEventData)payload;
+        return d.GenerateMessage(
+            l => l.Log(
+                d.Level,
+                d.EventId,
+                d.MessageFormat,
+                p.ForeignKey.Properties.Format(),
+                p.ForeignKey.DeclaringEntityType.DisplayName(),
+                p.ForeignKey.PrincipalEntityType.DisplayName(),
+                p.ForeignKey.PrincipalEntityType.GetSchemaQualifiedTableName()!,
+                p.ForeignKey.PrincipalEntityType.DisplayName(),
+                p.ForeignKey.DeclaringEntityType.DisplayName(),
+                p.ForeignKey.PrincipalEntityType.DisplayName()));
+    }
+
+    /// <summary>
     ///     Logs the <see cref="RelationalEventId.OptionalDependentWithoutIdentifyingPropertyWarning" /> event.
     /// </summary>
     /// <param name="diagnostics">The diagnostics logger to use.</param>

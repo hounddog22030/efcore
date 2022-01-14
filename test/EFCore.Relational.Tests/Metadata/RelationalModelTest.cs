@@ -23,24 +23,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         [ConditionalTheory]
         [InlineData(true, Mapping.TPH)]
         [InlineData(true, Mapping.TPT)]
+        [InlineData(true, Mapping.TPC)]
         [InlineData(false, Mapping.TPH)]
         [InlineData(false, Mapping.TPT)]
+        [InlineData(false, Mapping.TPC)]
         public void Can_use_relational_model_with_tables(bool useExplicitMapping, Mapping mapping)
         {
             var model = CreateTestModel(mapToTables: useExplicitMapping, mapping: mapping);
 
-            Assert.Equal(9, model.Model.GetEntityTypes().Count());
-            Assert.Equal(mapping == Mapping.TPH || !useExplicitMapping ? 3 : 5, model.Tables.Count());
+            Assert.Equal(11, model.Model.GetEntityTypes().Count());
+            Assert.Equal(mapping == Mapping.TPC
+                ? 5
+                : mapping == Mapping.TPH
+                    ? 3
+                    : 6, model.Tables.Count());
             Assert.Empty(model.Views);
             Assert.True(model.Model.GetEntityTypes().All(et => !et.GetViewMappings().Any()));
 
-            AssertDefaultMappings(model);
+            AssertDefaultMappings(model, mapping);
             AssertTables(model, useExplicitMapping ? mapping : Mapping.TPH);
         }
 
         [ConditionalTheory]
         [InlineData(Mapping.TPH)]
         [InlineData(Mapping.TPT)]
+        [InlineData(Mapping.TPC)]
         public void Can_use_relational_model_with_views(Mapping mapping)
         {
             var model = CreateTestModel(mapToTables: false, mapToViews: true, mapping);
@@ -50,13 +57,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             Assert.Empty(model.Tables);
             Assert.True(model.Model.GetEntityTypes().All(et => !et.GetTableMappings().Any()));
 
-            AssertDefaultMappings(model);
+            AssertDefaultMappings(model, mapping);
             AssertViews(model, mapping);
         }
 
         [ConditionalTheory]
         [InlineData(Mapping.TPH)]
         [InlineData(Mapping.TPT)]
+        [InlineData(Mapping.TPC)]
         public void Can_use_relational_model_with_views_and_tables(Mapping mapping)
         {
             var model = CreateTestModel(mapToTables: true, mapToViews: true, mapping);
@@ -65,12 +73,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             Assert.Equal(mapping == Mapping.TPH ? 3 : 5, model.Tables.Count());
             Assert.Equal(mapping == Mapping.TPH ? 3 : 5, model.Views.Count());
 
-            AssertDefaultMappings(model);
+            AssertDefaultMappings(model, mapping);
             AssertTables(model, mapping);
             AssertViews(model, mapping);
         }
 
-        private static void AssertDefaultMappings(IRelationalModel model)
+        private static void AssertDefaultMappings(IRelationalModel model, Mapping mapping)
         {
             var orderType = model.Model.FindEntityType(typeof(Order));
             var orderMapping = orderType.GetDefaultMappings().Single();
@@ -114,7 +122,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
             var customerType = model.Model.FindEntityType(typeof(Customer));
             var customerTable = customerType.GetDefaultMappings().Single().Table;
-            Assert.Equal("Microsoft.EntityFrameworkCore.Metadata.RelationalModelTest+Customer", customerTable.Name);
+            Assert.Equal("Microsoft.EntityFrameworkCore.Metadata.RelationalModelTest+AbstractBase", customerTable.Name);
             Assert.Null(customerTable.Schema);
 
             var specialCustomerType = model.Model.FindEntityType(typeof(SpecialCustomer));
@@ -127,7 +135,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             var specialCustomerTable = specialCustomerDefaultMapping.Table;
             Assert.Equal(customerTable, specialCustomerTable);
 
-            Assert.Equal(3, specialCustomerTable.EntityTypeMappings.Count());
+            Assert.Equal(5, specialCustomerTable.EntityTypeMappings.Count());
             Assert.True(specialCustomerTable.EntityTypeMappings.First().IsSharedTablePrincipal);
 
             Assert.Equal(specialCustomerType.FindDiscriminatorProperty() == null ? 8 : 9, specialCustomerTable.Columns.Count());
@@ -210,8 +218,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             var customerPk = specialCustomerType.FindPrimaryKey();
 
             Assert.False(customerView.IsOptional(customerType));
-            Assert.False(customerView.IsOptional(specialCustomerType));
-            Assert.False(customerView.IsOptional(extraSpecialCustomerType));
+            if (mapping == Mapping.TPC)
+            {
+                Assert.Equal(
+                    RelationalStrings.TableNotMappedEntityType(nameof(SpecialCustomer), customerView.Name),
+                    Assert.Throws<InvalidOperationException>(
+                        () => customerView.IsOptional(specialCustomerType)).Message);
+            }
+            else
+            {
+                Assert.False(customerView.IsOptional(specialCustomerType));
+                Assert.False(customerView.IsOptional(extraSpecialCustomerType));
+            }
 
             var mappedToTable = orderType.GetTableName() != null;
             var ordersCustomerForeignKey = orderType.FindNavigation(nameof(Order.Customer)).ForeignKey;
@@ -290,17 +308,35 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             {
                 var specialCustomerViewMapping = specialCustomerType.GetViewMappings().Single();
                 Assert.True(specialCustomerViewMapping.IsSplitEntityTypePrincipal);
-                Assert.True(specialCustomerViewMapping.IncludesDerivedTypes);
-
                 var specialCustomerView = specialCustomerViewMapping.View;
-                Assert.Same(customerView, specialCustomerView);
-
-                Assert.Equal(4, specialCustomerView.EntityTypeMappings.Count());
-                Assert.True(specialCustomerView.EntityTypeMappings.First().IsSharedTablePrincipal);
-                Assert.False(specialCustomerView.EntityTypeMappings.Last().IsSharedTablePrincipal);
-
                 var specialityColumn = specialCustomerView.Columns.Single(c => c.Name == nameof(SpecialCustomer.Speciality));
-                Assert.True(specialityColumn.IsNullable);
+                if (mapping == Mapping.TPH)
+                {
+                    Assert.True(specialCustomerViewMapping.IncludesDerivedTypes);
+                    Assert.Same(customerView, specialCustomerView);
+
+                    Assert.Equal(4, specialCustomerView.EntityTypeMappings.Count());
+                    Assert.True(specialCustomerView.EntityTypeMappings.First().IsSharedTablePrincipal);
+                    Assert.False(specialCustomerView.EntityTypeMappings.Last().IsSharedTablePrincipal);
+
+                    Assert.True(specialityColumn.IsNullable);
+                }
+                else
+                {
+                    Assert.False(specialCustomerViewMapping.IncludesDerivedTypes);
+                    Assert.NotSame(customerView, specialCustomerView);
+
+                    Assert.True(customerView.EntityTypeMappings.Single().IsSharedTablePrincipal);
+                    Assert.Equal(5, customerView.Columns.Count());
+
+                    Assert.Equal(2, specialCustomerView.EntityTypeMappings.Count());
+                    Assert.True(specialCustomerView.EntityTypeMappings.First().IsSharedTablePrincipal);
+                    Assert.False(specialCustomerView.EntityTypeMappings.Last().IsSharedTablePrincipal);
+
+                    Assert.Equal(9, specialCustomerView.Columns.Count());
+
+                    Assert.False(specialityColumn.IsNullable);
+                }
             }
         }
 
@@ -405,17 +441,28 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             Assert.Equal("DateDetails", orderDateFkConstraint.PrincipalTable.Name);
 
             var orderCustomerFk = orderType.GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
-            var orderCustomerFkConstraint = orderCustomerFk.GetMappedConstraints().Single();
 
-            Assert.Equal("FK_Order_Customer_CustomerId", orderCustomerFkConstraint.Name);
-            Assert.Equal(nameof(Order.CustomerId), orderCustomerFkConstraint.Columns.Single().Name);
-            Assert.Equal(nameof(Customer.Id), orderCustomerFkConstraint.PrincipalColumns.Single().Name);
-            Assert.Same(ordersTable, orderCustomerFkConstraint.Table);
-            Assert.Equal("Customer", orderCustomerFkConstraint.PrincipalTable.Name);
-            Assert.Equal(ReferentialAction.Cascade, orderCustomerFkConstraint.OnDeleteAction);
-            Assert.Equal(orderCustomerFk, orderCustomerFkConstraint.MappedForeignKeys.Single());
-            Assert.Equal(new[] { orderDateFkConstraint, orderCustomerFkConstraint }, ordersTable.ForeignKeyConstraints);
+            if (mapping == Mapping.TPC)
+            {
+                // Derived principal entity types are mapped to different tables, so the constraint is not enforceable
+                Assert.Empty(orderCustomerFk.GetMappedConstraints());
+            }
+            else
+            {
+                var orderCustomerFkConstraint = orderCustomerFk.GetMappedConstraints().Single();
 
+                Assert.Equal("FK_Order_Base_CustomerId", orderCustomerFkConstraint.Name);
+                Assert.Equal(nameof(Order.CustomerId), orderCustomerFkConstraint.Columns.Single().Name);
+                Assert.Equal(nameof(Customer.Id), orderCustomerFkConstraint.PrincipalColumns.Single().Name);
+                Assert.Same(ordersTable, orderCustomerFkConstraint.Table);
+                Assert.Equal("Base", orderCustomerFkConstraint.PrincipalTable.Name);
+                Assert.Equal(ReferentialAction.Cascade, orderCustomerFkConstraint.OnDeleteAction);
+                Assert.Equal(orderCustomerFk, orderCustomerFkConstraint.MappedForeignKeys.Single());
+                Assert.Equal(new[] { orderDateFkConstraint, orderCustomerFkConstraint }, ordersTable.ForeignKeyConstraints);
+            }
+
+            var abstractBaseType = model.Model.FindEntityType(typeof(AbstractBase));
+            var abstractCustomerType = model.Model.FindEntityType(typeof(AbstractCustomer));
             var customerType = model.Model.FindEntityType(typeof(Customer));
             var specialCustomerType = model.Model.FindEntityType(typeof(SpecialCustomer));
             var extraSpecialCustomerType = model.Model.FindEntityType(typeof(ExtraSpecialCustomer));
@@ -477,8 +524,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
             Assert.Equal("FK_DateDetails", orderDateFkConstraint.Name);
 
+            var baseTable = abstractBaseType.GetTableMappings().Single().Table;
+
             var customerTable = customerType.GetTableMappings().Single().Table;
-            Assert.Equal("Customer", customerTable.Name);
 
             var ordersCustomerForeignKey = orderType.FindNavigation(nameof(Order.Customer)).ForeignKey;
             Assert.Equal("FK_Order_Customer_CustomerId", ordersCustomerForeignKey.GetConstraintName());
@@ -516,13 +564,28 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 StoreObjectIdentifier.Table(specialCustomerTable.Name, specialCustomerTable.Schema)));
 
             Assert.False(customerTable.IsOptional(customerType));
-            Assert.False(customerTable.IsOptional(specialCustomerType));
-            Assert.False(customerTable.IsOptional(extraSpecialCustomerType));
+            if (mapping == Mapping.TPC)
+            {
+                Assert.Equal(
+                    RelationalStrings.TableNotMappedEntityType(nameof(SpecialCustomer), customerTable.Name),
+                    Assert.Throws<InvalidOperationException>(
+                        () => customerTable.IsOptional(specialCustomerType)).Message);
+            }
+            else
+            {
+                Assert.False(customerTable.IsOptional(specialCustomerType));
+                Assert.False(customerTable.IsOptional(extraSpecialCustomerType));
+            }
 
             var customerPk = specialCustomerType.FindPrimaryKey();
 
             if (mapping == Mapping.TPT)
             {
+                Assert.Equal("Base", baseTable.Name);
+                Assert.Equal(baseTable.Name, abstractBaseType.Name);
+                Assert.Equal(nameof(Customer), customerTable.Name);
+                Assert.Null(abstractCustomerType.GetTableName());
+                Assert.Equal(nameof(SpecialCustomer), specialCustomerType.GetTableName());
                 Assert.Equal(2, specialCustomerType.GetTableMappings().Count());
                 Assert.True(specialCustomerType.GetTableMappings().First().IsSplitEntityTypePrincipal);
                 Assert.False(specialCustomerType.GetTableMappings().First().IncludesDerivedTypes);
@@ -539,16 +602,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 var specialityColumn = specialCustomerTable.Columns.Single(c => c.Name == nameof(SpecialCustomer.Speciality));
                 Assert.False(specialityColumn.IsNullable);
 
-                var addressColumn = specialCustomerTable.Columns.Single(
-                    c => c.Name == nameof(SpecialCustomer.Details) + "_" + nameof(CustomerDetails.Address));
+                var addressColumn = specialCustomerTable.Columns.Single(c =>
+                    c.Name == nameof(SpecialCustomer.Details) + "_" + nameof(CustomerDetails.Address));
                 Assert.False(addressColumn.IsNullable);
                 var specialityProperty = specialityColumn.PropertyMappings.First().Property;
 
                 Assert.Equal(
                     RelationalStrings.PropertyNotMappedToTable(
                         nameof(SpecialCustomer.Speciality), nameof(SpecialCustomer), "Customer"),
-                    Assert.Throws<InvalidOperationException>(
-                            () => specialityProperty.IsColumnNullable(StoreObjectIdentifier.Table(customerTable.Name, customerTable.Schema)))
+                    Assert.Throws<InvalidOperationException>(() =>
+                        specialityProperty.IsColumnNullable(StoreObjectIdentifier.Table(customerTable.Name, customerTable.Schema)))
                         .Message);
 
                 var extraSpecialCustomerTable =
@@ -608,48 +671,93 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             {
                 var specialCustomerTypeMapping = specialCustomerType.GetTableMappings().Single();
                 Assert.True(specialCustomerTypeMapping.IsSplitEntityTypePrincipal);
-                Assert.True(specialCustomerTypeMapping.IncludesDerivedTypes);
-
-                Assert.Same(customerTable, specialCustomerTable);
-
-                Assert.Equal(4, specialCustomerTable.EntityTypeMappings.Count());
-                Assert.True(specialCustomerTable.EntityTypeMappings.First().IsSharedTablePrincipal);
-                Assert.False(specialCustomerTable.EntityTypeMappings.Last().IsSharedTablePrincipal);
 
                 var specialityColumn = specialCustomerTable.Columns.Single(c => c.Name == nameof(SpecialCustomer.Speciality));
-                Assert.True(specialityColumn.IsNullable);
-
                 var addressColumn = specialCustomerTable.Columns.Single(c =>
-                        c.Name == nameof(SpecialCustomer.Details) + "_" + nameof(CustomerDetails.Address));
-                Assert.True(addressColumn.IsNullable);
-
-                Assert.Same(specialityCK, specialCustomerTable.CheckConstraints.Single());
+                    c.Name == nameof(SpecialCustomer.Details) + "_" + nameof(CustomerDetails.Address));
 
                 var specialCustomerPkConstraint = specialCustomerTable.PrimaryKey;
-                Assert.Equal("PK_Customer", specialCustomerPkConstraint.Name);
-                Assert.Same(specialCustomerPkConstraint.MappedKeys.First(), customerPk);
+                var specialCustomerUniqueConstraint = specialCustomerTable.UniqueConstraints.Single(c => !c.GetIsPrimaryKey());
+                var specialCustomerDbIndex = specialCustomerTable.Indexes.Last();
+                var anotherSpecialCustomerDbIndex = specialCustomerTable.Indexes.First();
 
                 var idProperty = customerPk.Properties.Single();
-                Assert.Equal(3, idProperty.GetTableColumnMappings().Count());
 
-                var specialCustomerUniqueConstraint = specialCustomerTable.UniqueConstraints.Single(c => !c.GetIsPrimaryKey());
-                Assert.Equal("AK_Customer_SpecialityAk", specialCustomerUniqueConstraint.Name);
+                if (mapping == Mapping.TPH)
+                {
+                    Assert.Equal("Base", baseTable.Name);
+                    Assert.Equal(baseTable.Name, abstractBaseType.GetTableName());
+                    Assert.Equal(baseTable.Name, customerTable.Name);
+                    Assert.Equal(baseTable.Name, abstractCustomerType.GetTableName());
+                    Assert.Equal(baseTable.Name, specialCustomerType.GetTableName());
+
+                    Assert.True(specialCustomerTypeMapping.IncludesDerivedTypes);
+                    Assert.Same(customerTable, specialCustomerTable);
+
+                    Assert.Equal(6, specialCustomerTable.EntityTypeMappings.Count());
+                    Assert.True(specialCustomerTable.EntityTypeMappings.First().IsSharedTablePrincipal);
+                    Assert.False(specialCustomerTable.EntityTypeMappings.Last().IsSharedTablePrincipal);
+
+                    Assert.Equal(10, specialCustomerTable.Columns.Count());
+
+                    Assert.True(specialityColumn.IsNullable);
+                    Assert.True(addressColumn.IsNullable);
+
+                    Assert.Equal("PK_Base", specialCustomerPkConstraint.Name);
+                    Assert.Equal("AK_Base_SpecialityAk", specialCustomerUniqueConstraint.Name);
+
+                    var specialCustomerFkConstraint = specialCustomerTable.ForeignKeyConstraints.Last();
+                    Assert.Equal("FK_Base_Base_RelatedCustomerSpeciality", specialCustomerFkConstraint.Name);
+                    Assert.NotNull(specialCustomerFkConstraint.MappedForeignKeys.Single());
+
+                    var anotherSpecialCustomerFkConstraint = specialCustomerTable.ForeignKeyConstraints.First();
+                    Assert.Equal("FK_Base_Base_AnotherRelatedCustomerId", anotherSpecialCustomerFkConstraint.Name);
+                    Assert.NotNull(anotherSpecialCustomerFkConstraint.MappedForeignKeys.Single());
+
+                    Assert.Equal("IX_Base_RelatedCustomerSpeciality", specialCustomerDbIndex.Name);
+                    Assert.Equal("IX_Base_AnotherRelatedCustomerId", anotherSpecialCustomerDbIndex.Name);
+
+                    Assert.Equal(5, idProperty.GetTableColumnMappings().Count());
+                }
+                else
+                {
+                    Assert.Equal("Base", baseTable.Name);
+                    Assert.Equal(baseTable.Name, abstractBaseType.GetTableName());
+                    Assert.Equal(nameof(Customer), customerTable.Name);
+                    Assert.Null(abstractCustomerType.GetTableName());
+                    Assert.Equal(nameof(SpecialCustomer), specialCustomerType.GetTableName());
+
+                    Assert.False(specialCustomerTypeMapping.IncludesDerivedTypes);
+                    Assert.NotSame(customerTable, specialCustomerTable);
+
+                    Assert.True(customerTable.EntityTypeMappings.Single().IsSharedTablePrincipal);
+                    Assert.Equal(5, customerTable.Columns.Count());
+
+                    Assert.Equal(2, specialCustomerTable.EntityTypeMappings.Count());
+                    Assert.True(specialCustomerTable.EntityTypeMappings.First().IsSharedTablePrincipal);
+                    Assert.False(specialCustomerTable.EntityTypeMappings.Last().IsSharedTablePrincipal);
+
+                    Assert.Equal(9, specialCustomerTable.Columns.Count());
+
+                    Assert.False(specialityColumn.IsNullable);
+                    Assert.False(addressColumn.IsNullable);
+
+                    Assert.Equal("PK_SpecialCustomer", specialCustomerPkConstraint.Name);
+                    Assert.Equal("AK_SpecialCustomer_SpecialityAk", specialCustomerUniqueConstraint.Name);
+
+                    Assert.Empty(specialCustomerTable.ForeignKeyConstraints);
+
+                    Assert.Equal("IX_SpecialCustomer_RelatedCustomerSpeciality", specialCustomerDbIndex.Name);
+                    Assert.Equal("IX_SpecialCustomer_AnotherRelatedCustomerId", anotherSpecialCustomerDbIndex.Name);
+
+                    Assert.Equal(3, idProperty.GetTableColumnMappings().Count());
+                }
+
+                Assert.Same(specialCustomerPkConstraint.MappedKeys.First(), customerPk);
+
                 Assert.NotNull(specialCustomerUniqueConstraint.MappedKeys.Single());
 
-                var specialCustomerFkConstraint = specialCustomerTable.ForeignKeyConstraints.Last();
-                Assert.Equal("FK_Customer_Customer_RelatedCustomerSpeciality", specialCustomerFkConstraint.Name);
-                Assert.NotNull(specialCustomerFkConstraint.MappedForeignKeys.Single());
-
-                var anotherSpecialCustomerFkConstraint = specialCustomerTable.ForeignKeyConstraints.First();
-                Assert.Equal("FK_Customer_Customer_AnotherRelatedCustomerId", anotherSpecialCustomerFkConstraint.Name);
-                Assert.NotNull(anotherSpecialCustomerFkConstraint.MappedForeignKeys.Single());
-
-                var specialCustomerDbIndex = specialCustomerTable.Indexes.Last();
-                Assert.Equal("IX_Customer_RelatedCustomerSpeciality", specialCustomerDbIndex.Name);
                 Assert.NotNull(specialCustomerDbIndex.MappedIndexes.Single());
-
-                var anotherSpecialCustomerDbIndex = specialCustomerTable.Indexes.First();
-                Assert.Equal("IX_Customer_AnotherRelatedCustomerId", anotherSpecialCustomerDbIndex.Name);
                 Assert.NotNull(specialCustomerDbIndex.MappedIndexes.Single());
             }
         }
@@ -657,37 +765,86 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         private IRelationalModel CreateTestModel(bool mapToTables = false, bool mapToViews = false, Mapping mapping = Mapping.TPH)
         {
             var modelBuilder = CreateConventionModelBuilder();
+
+            modelBuilder.Entity<AbstractBase>(
+                cb =>
+                {
+                    if (mapping != Mapping.TPC)
+                    {
+                        if (mapToViews)
+                        {
+                            cb.ToView("BaseView", "viewSchema");
+                        }
+
+                        if (mapToTables)
+                        {
+                            cb.ToTable("Base");
+                        }
+                    }
+
+                    if (mapping == Mapping.TPC)
+                    {
+                        cb.UseTpcMappingStrategy();
+                    }
+                    else if (mapping == Mapping.TPT
+                        && (mapToTables || mapToViews))
+                    {
+                        cb.UseTptMappingStrategy();
+                    }
+
+                    // TODO: Don't map it on the base #19811
+                    cb.Property<string>("SpecialityAk");
+                });
+
             modelBuilder.Entity<Customer>(
                 cb =>
                 {
-                    if (mapToViews)
+                    if (mapping != Mapping.TPH)
                     {
-                        cb.ToView("CustomerView", "viewSchema");
-                    }
+                        if (mapToViews)
+                        {
+                            cb.ToView("CustomerView", "viewSchema");
+                        }
 
-                    if (mapToTables)
+                        if (mapToTables)
+                        {
+                            cb.ToTable("Customer");
+                        }
+                    }
+                });
+
+            modelBuilder.Entity<AbstractCustomer>(
+                cb =>
+                {
+                    if (mapping != Mapping.TPH)
                     {
-                        cb.ToTable("Customer");
-                    }
+                        if (mapToViews)
+                        {
+                            cb.ToView(null);
+                        }
 
-                    cb.Property<string>("SpecialityAk");
+                        if (mapToTables)
+                        {
+                            cb.ToTable((string)null);
+                        }
+                    }
                 });
 
             modelBuilder.Entity<SpecialCustomer>(
                 cb =>
                 {
-                    if (mapToViews
-                        && mapping == Mapping.TPT)
+                    if (mapping != Mapping.TPH)
                     {
-                        cb.ToView("SpecialCustomerView");
-                    }
+                        if (mapToViews)
+                        {
+                            cb.ToView("SpecialCustomerView");
+                        }
 
-                    if (mapToTables
-                        && mapping == Mapping.TPT)
-                    {
-                        cb.ToTable("SpecialCustomer", "SpecialSchema");
+                        if (mapToTables)
+                        {
+                            cb.ToTable("SpecialCustomer", "SpecialSchema");
+                        }
                     }
-
                     cb.HasCheckConstraint($"Speciality", $"[Speciality] IN ('Specialist', 'Generalist')");
 
                     cb.Property(s => s.Speciality).IsRequired();
@@ -706,16 +863,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             modelBuilder.Entity<ExtraSpecialCustomer>(
                 cb =>
                 {
-                    if (mapToViews
-                        && mapping == Mapping.TPT)
+                    if (mapping != Mapping.TPH)
                     {
-                        cb.ToView("ExtraSpecialCustomerView");
-                    }
+                        if (mapToViews)
+                        {
+                            cb.ToView("ExtraSpecialCustomerView");
+                        }
 
-                    if (mapToTables
-                        && mapping == Mapping.TPT)
-                    {
-                        cb.ToTable("ExtraSpecialCustomer", "ExtraSpecialSchema");
+                        if (mapToTables)
+                        {
+                            cb.ToTable("ExtraSpecialCustomer", "ExtraSpecialSchema");
+                        }
                     }
                 });
 
@@ -1028,9 +1186,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
         public enum Mapping
         {
+#pragma warning disable SA1602 // Enumeration items should be documented
             TPH,
             TPT,
             TPC
+#pragma warning restore SA1602 // Enumeration items should be documented
         }
 
         private enum MyEnum : ulong
@@ -1040,9 +1200,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             Tue
         }
 
-        private class Customer
+        private abstract class AbstractBase
         {
             public int Id { get; set; }
+        }
+
+        private class Customer : AbstractBase
+        {
             public string Name { get; set; }
             public short SomeShort { get; set; }
             public MyEnum EnumValue { get; set; }
@@ -1050,7 +1214,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             public IEnumerable<Order> Orders { get; set; }
         }
 
-        private class SpecialCustomer : Customer
+        private abstract class AbstractCustomer : Customer
+        {
+        }
+
+        private class SpecialCustomer : AbstractCustomer
         {
             public string Speciality { get; set; }
             public string RelatedCustomerSpeciality { get; set; }

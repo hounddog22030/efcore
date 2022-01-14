@@ -27,6 +27,14 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
             = new ResourceManager("Microsoft.EntityFrameworkCore.Properties.RelationalStrings", typeof(RelationalStrings).Assembly);
 
         /// <summary>
+        ///     The corresponding CLR type for entity type '{entityType}' cannot be instantiated, but the entity type was mapped to '{storeObject}' using the 'TPC' mapping strategy. Only instantiable types should be mapped. See https://go.microsoft.com/fwlink/?linkid=2130430 for more information.
+        /// </summary>
+        public static string AbstractTPC(object? entityType, object? storeObject)
+            => string.Format(
+                GetString("AbstractTPC", nameof(entityType), nameof(storeObject)),
+                entityType, storeObject);
+
+        /// <summary>
         ///     Unable to deserialize a sequence from model metadata. See inner exception for details.
         /// </summary>
         [Obsolete]
@@ -294,6 +302,14 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
             => string.Format(
                 GetString("DeleteDataOperationValuesCountMismatch", nameof(valuesCount), nameof(columnsCount), nameof(table)),
                 valuesCount, columnsCount, table);
+
+        /// <summary>
+        ///     The derived entity type '{entityType}' was configured with the '{strategy}' mapping strategy. Only the root entity type should be configured with a mapping strategy. See https://go.microsoft.com/fwlink/?linkid=2130430 for more information.
+        /// </summary>
+        public static string DerivedStrategy(object? entityType, object? strategy)
+            => string.Format(
+                GetString("DerivedStrategy", nameof(entityType), nameof(strategy)),
+                entityType, strategy);
 
         /// <summary>
         ///     Using 'Distinct' operation on a projection containing a collection is not supported.
@@ -760,6 +776,14 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
                 entityType, baseEntityType);
 
         /// <summary>
+        ///     The mapping strategy '{mappingStrategy}' specified on '{entityType}' is not supported.
+        /// </summary>
+        public static string InvalidMappingStrategy(object? mappingStrategy, object? entityType)
+            => string.Format(
+                GetString("InvalidMappingStrategy", nameof(mappingStrategy), nameof(entityType)),
+                mappingStrategy, entityType);
+
+        /// <summary>
         ///     The specified 'MaxBatchSize' value '{value}' is not valid. It must be a positive number.
         /// </summary>
         public static string InvalidMaxBatchSize(object? value)
@@ -774,6 +798,14 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
             => string.Format(
                 GetString("InvalidMinBatchSize", nameof(value)),
                 value);
+
+        /// <summary>
+        ///     The mapping strategy '{mappingStrategy}' specified on '{entityType}' is not supported for keyless entity types.
+        /// </summary>
+        public static string KeylessMappingStrategy(object? mappingStrategy, object? entityType)
+            => string.Format(
+                GetString("KeylessMappingStrategy", nameof(mappingStrategy), nameof(entityType)),
+                mappingStrategy, entityType);
 
         /// <summary>
         ///     Queries performing '{method}' operation must have a deterministic sort order. Rewrite the query to apply an 'OrderBy' operation on the sequence before calling '{method}'.
@@ -920,7 +952,15 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
                 parameterName, functionName);
 
         /// <summary>
-        ///     Both '{entityType}' and '{otherEntityType}' are mapped to the table '{table}'. All the entity types in a hierarchy that don't have a discriminator must be mapped to different tables. See https://go.microsoft.com/fwlink/?linkid=2130430 for more information.
+        ///     The mapping strategy '{mappingStrategy}' specified on '{entityType}' is not supported for entity types with a discriminator.
+        /// </summary>
+        public static string NonTphMappingStrategy(object? mappingStrategy, object? entityType)
+            => string.Format(
+                GetString("NonTphMappingStrategy", nameof(mappingStrategy), nameof(entityType)),
+                mappingStrategy, entityType);
+
+        /// <summary>
+        ///     Both '{entityType}' and '{otherEntityType}' are mapped to the table '{table}'. All the entity types in a non-TPH hierarchy (one that doesn't have a discriminator) must be mapped to different tables. See https://go.microsoft.com/fwlink/?linkid=2130430 for more information.
         /// </summary>
         public static string NonTPHTableClash(object? entityType, object? otherEntityType, object? table)
             => string.Format(
@@ -928,7 +968,7 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
                 entityType, otherEntityType, table);
 
         /// <summary>
-        ///     Both '{entityType}' and '{otherEntityType}' are mapped to the view '{view}'. All the entity types in a hierarchy that don't have a discriminator must be mapped to different views. See https://go.microsoft.com/fwlink/?linkid=2130430 for more information.
+        ///     Both '{entityType}' and '{otherEntityType}' are mapped to the view '{view}'. All the entity types in a non-TPH hierarchy (one that doesn't have a discriminator) must be mapped to different views. See https://go.microsoft.com/fwlink/?linkid=2130430 for more information.
         /// </summary>
         public static string NonTPHViewClash(object? entityType, object? otherEntityType, object? view)
             => string.Format(
@@ -2039,6 +2079,28 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics.Internal
                         LogLevel.Error,
                         "RelationalEventId.ForeignKeyPropertiesMappedToUnrelatedTables",
                         _resourceManager.GetString("LogForeignKeyPropertiesMappedToUnrelatedTables")!));
+            }
+
+            return (FallbackEventDefinition)definition;
+        }
+
+        /// <summary>
+        ///     The foreign key {foreignKeyProperties} on the entity type '{entityType}' targeting '{principalEntityType}' cannot be represented in the database. '{principalEntityType}' is mapped using the table per concrete type meaning that the derived entities will not be present in {'principalTable'}. If this foreign key on '{entityType}' will never reference entities derived from '{principalEntityType}' then the foreign key constraint name can be specified explicitly to force it to be created.
+        /// </summary>
+        public static FallbackEventDefinition LogForeignKeyTPCPrincipal(IDiagnosticsLogger logger)
+        {
+            var definition = ((RelationalLoggingDefinitions)logger.Definitions).LogForeignKeyTPCPrincipal;
+            if (definition == null)
+            {
+                definition = NonCapturingLazyInitializer.EnsureInitialized(
+                    ref ((RelationalLoggingDefinitions)logger.Definitions).LogForeignKeyTPCPrincipal,
+                    logger,
+                    static logger => new FallbackEventDefinition(
+                        logger.Options,
+                        RelationalEventId.ForeignKeyTPCPrincipal,
+                        LogLevel.Warning,
+                        "RelationalEventId.ForeignKeyTPCPrincipal",
+                        _resourceManager.GetString("LogForeignKeyTPCPrincipal")!));
             }
 
             return (FallbackEventDefinition)definition;
