@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -13,6 +14,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 {
@@ -284,10 +286,16 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     .OrderByDescending(m => m.Key)
                     .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
                     .ToList();
+                
                 actualTargetMigration = appliedMigrations
                     .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) == 0)
                     .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
                     .SingleOrDefault();
+            }
+
+            foreach (var migration in migrationsToRevert)
+            {
+                _logger.Logger.LogTrace("Reverting migration: '{name}'", migration.GetType().FullName);
             }
         }
 
