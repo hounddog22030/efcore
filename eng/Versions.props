@@ -9,6 +9,7 @@
     -->
     <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">true</StabilizePackageVersion>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <DotNetFinalVersionKind>prerelease</DotNetFinalVersionKind>
   </PropertyGroup>
   <PropertyGroup Label="Arcade settings">
     <UsingToolXliff>False</UsingToolXliff>
