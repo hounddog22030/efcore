@@ -1,17 +1,16 @@
 <Project>
   <PropertyGroup Label="Version settings">
     <VersionPrefix>6.0.3</VersionPrefix>
-    <PreReleaseVersionLabel>logging</PreReleaseVersionLabel>
+    <PreReleaseVersionLabel>preview</PreReleaseVersionLabel>
+    <PreReleaseVersionIteration>1</PreReleaseVersionIteration>
     <IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
     <IsServicingBuild Condition="'$(PreReleaseVersionLabel)' == 'servicing'">true</IsServicingBuild>
     <!--
         When StabilizePackageVersion is set to 'true', this branch will produce stable outputs for 'Shipping' packages
     -->
-    <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">true</StabilizePackageVersion>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-    <DotNetFinalVersionKind>prerelease</DotNetFinalVersionKind>
-  </PropertyGroup>
-  <PropertyGroup Label="Arcade settings">
+    <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">false</StabilizePackageVersion>
+    <DotNetFinalVersionKind Condition="'$(StabilizePackageVersion)' == 'true'">release</DotNetFinalVersionKind>
+  </PropertyGroup>  <PropertyGroup Label="Arcade settings">
     <UsingToolXliff>False</UsingToolXliff>
   </PropertyGroup>
   <PropertyGroup Label="Dependencies from dotnet/runtime">
