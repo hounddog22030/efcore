@@ -4,7 +4,7 @@
   <PropertyGroup>
     <AnalysisLevel>latest</AnalysisLevel>
     <IsPackable>True</IsPackable>
-    <IncludeSymbols>True</IncludeSymbols>
+    <IncludeSymbols>False</IncludeSymbols>
     <Nullable>enable</Nullable>
     <Feature>nullablePublicOnly</Feature>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)..\rulesets\EFCore.ruleset</CodeAnalysisRuleSet>
