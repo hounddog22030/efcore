@@ -9,7 +9,6 @@
         When StabilizePackageVersion is set to 'true', this branch will produce stable outputs for 'Shipping' packages
     -->
     <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">false</StabilizePackageVersion>
-    <DotNetFinalVersionKind>prerelease</DotNetFinalVersionKind>
   </PropertyGroup>  <PropertyGroup Label="Arcade settings">
     <UsingToolXliff>False</UsingToolXliff>
   </PropertyGroup>
