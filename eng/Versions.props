@@ -1,7 +1,8 @@
 <Project>
   <PropertyGroup Label="Version settings">
     <VersionPrefix>6.0.3</VersionPrefix>
-    <PreReleaseVersionLabel>rollback-logging</PreReleaseVersionLabel>
+    <PreReleaseVersionLabel>rollback</PreReleaseVersionLabel>
+    <PreReleaseVersionIteration>1</PreReleaseVersionIteration>
     <IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
     <IsServicingBuild Condition="'$(PreReleaseVersionLabel)' == 'servicing'">true</IsServicingBuild>
     <!--
