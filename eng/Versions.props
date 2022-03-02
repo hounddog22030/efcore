@@ -1,9 +1,10 @@
 <Project>
   <PropertyGroup Label="Version settings">
-    <VersionPrefix>6.0.3</VersionPrefix>
+    <MajorVersion>6</MajorVersion>
+    <MinorVersion>0</MinorVersion>
     <PreReleaseVersionLabel>preview</PreReleaseVersionLabel>
-    <PreReleaseVersionIteration>1</PreReleaseVersionIteration>
-    <IncludeSourceRevisionInInformationalVersion>False</IncludeSourceRevisionInInformationalVersion>
+    <PreReleaseVersionIteration>$(CODEBUILD_BUILD_NUMBER)</PreReleaseVersionIteration>
+    <IncludeSourceRevisionInInformationalVersion>True</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
   <PropertyGroup Label="Arcade settings">
     <UsingToolXliff>False</UsingToolXliff>
