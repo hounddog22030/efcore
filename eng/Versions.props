@@ -3,7 +3,7 @@
     <MajorVersion>6</MajorVersion>
     <MinorVersion>0</MinorVersion>
     <PatchVersion>2</PatchVersion>
-    <PreReleaseLabel>preview</PreReleaseLabel>
+    <PreReleaseLabel>rollback</PreReleaseLabel>
     <BuildNumber Condition="'$(BuildNumber)' == ''">$(CODEBUILD_BUILD_NUMBER)</BuildNumber>
 
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
