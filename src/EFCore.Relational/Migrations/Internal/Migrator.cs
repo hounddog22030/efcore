@@ -307,6 +307,11 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             {
                 _logger.Logger.LogTrace("Reverting migration: '{name}'", migration.GetType().FullName);
             }
+
+            foreach (var migration in migrationsToRevert)
+            {
+                _logger.Logger.LogTrace("Reverting migration: '{name}'", migration.GetType().FullName);
+            }
         }
 
         /// <summary>
