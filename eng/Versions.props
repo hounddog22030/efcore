@@ -2,7 +2,7 @@
   <PropertyGroup Label="Version settings">
     <MajorVersion>6</MajorVersion>
     <MinorVersion>0</MinorVersion>
-    <PatchVersion>2</PatchVersion>
+    <PatchVersion>4</PatchVersion>
     <PreReleaseLabel>rollback</PreReleaseLabel>
     <BuildNumber Condition="'$(BuildNumber)' == ''">$(CODEBUILD_BUILD_NUMBER)</BuildNumber>
 
