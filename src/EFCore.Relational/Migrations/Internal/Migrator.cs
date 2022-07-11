@@ -234,74 +234,79 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             out IReadOnlyList<Migration> migrationsToRevert,
             out Migration? actualTargetMigration)
         {
-            var appliedMigrations = new Dictionary<string, TypeInfo>();
-            var unappliedMigrations = new Dictionary<string, TypeInfo>();
-            var appliedMigrationEntrySet = new HashSet<string>(appliedMigrationEntries, StringComparer.OrdinalIgnoreCase);
-            if (_migrationsAssembly.Migrations.Count == 0)
+            using (_logger.Logger.BeginScope($"{nameof(targetMigration)}={{0}}", targetMigration))
             {
-                _logger.MigrationsNotFound(this, _migrationsAssembly);
-            }
-
-            foreach (var migration in _migrationsAssembly.Migrations)
-            {
-                if (appliedMigrationEntrySet.Contains(migration.Key))
+                var appliedMigrations = new Dictionary<string, TypeInfo>();
+                var unappliedMigrations = new Dictionary<string, TypeInfo>();
+                var appliedMigrationEntrySet = new HashSet<string>(appliedMigrationEntries, StringComparer.OrdinalIgnoreCase);
+                if (_migrationsAssembly.Migrations.Count == 0)
                 {
-                    appliedMigrations.Add(migration.Key, migration.Value);
+                    _logger.MigrationsNotFound(this, _migrationsAssembly);
                 }
-                else
-                {
-                    unappliedMigrations.Add(migration.Key, migration.Value);
-                }
-            }
 
-            if (string.IsNullOrEmpty(targetMigration))
-            {
-                _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:string.IsNullOrEmpty(targetMigration)");
-                migrationsToApply = unappliedMigrations
-                    .OrderBy(m => m.Key)
-                    .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
-                    .ToList();
-                migrationsToRevert = Array.Empty<Migration>();
-                actualTargetMigration = null;
-            }
-            else if (targetMigration == Migration.InitialDatabase)
-            {
-                _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:targetMigration == Migration.InitialDatabase");
-                migrationsToApply = Array.Empty<Migration>();
-                migrationsToRevert = appliedMigrations
-                    .OrderByDescending(m => m.Key)
-                    .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
-                    .ToList();
-                actualTargetMigration = null;
-            }
-            else
-            {
-                _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:else");
-                targetMigration = _migrationsAssembly.GetMigrationId(targetMigration);
-                migrationsToApply = unappliedMigrations
-                    .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) <= 0)
-                    .OrderBy(m => m.Key)
-                    .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
-                    .ToList();
-                using (_logger.Logger.BeginScope($"{nameof(targetMigration)}={{0}}", targetMigration))
-                using (_logger.Logger.BeginScope($"{nameof(appliedMigrationEntries)}={{0}}", string.Join(',', appliedMigrationEntries)))
+                _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:{nameof(_migrationsAssembly)}.{nameof(_migrationsAssembly.Assembly)}.{nameof(_migrationsAssembly.Assembly.Location)}:{_migrationsAssembly.Assembly.Location}");
+                
+                foreach (var migration in _migrationsAssembly.Migrations)
                 {
+                    if (appliedMigrationEntrySet.Contains(migration.Key))
+                    {
+                        appliedMigrations.Add(migration.Key, migration.Value);
+                    }
+                    else
+                    {
+                        unappliedMigrations.Add(migration.Key, migration.Value);
+                    }
+                }
+
+                if (string.IsNullOrEmpty(targetMigration))
+                {
+                    _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:string.IsNullOrEmpty(targetMigration)");
+                    migrationsToApply = unappliedMigrations
+                        .OrderBy(m => m.Key)
+                        .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
+                        .ToList();
+                    migrationsToRevert = Array.Empty<Migration>();
+                    actualTargetMigration = null;
+                }
+                else if (targetMigration == Migration.InitialDatabase)
+                {
+                    _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:targetMigration == Migration.InitialDatabase");
+                    migrationsToApply = Array.Empty<Migration>();
                     migrationsToRevert = appliedMigrations
-                        .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) > 0)
                         .OrderByDescending(m => m.Key)
                         .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
                         .ToList();
-                    _logger.Logger.LogInformation(
-                        $"{nameof(PopulateMigrations)}:{nameof(migrationsToRevert)}='{{0}}'", string.Join(',', migrationsToRevert));
+                    actualTargetMigration = null;
+                }
+                else
+                {
+                    _logger.Logger.LogInformation($"{nameof(PopulateMigrations)}:else");
+                    targetMigration = _migrationsAssembly.GetMigrationId(targetMigration);
+                    migrationsToApply = unappliedMigrations
+                        .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) <= 0)
+                        .OrderBy(m => m.Key)
+                        .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
+                        .ToList();
+                    using (_logger.Logger.BeginScope($"{nameof(targetMigration)}={{0}}", targetMigration))
+                    using (_logger.Logger.BeginScope($"{nameof(appliedMigrationEntries)}={{0}}", string.Join(',', appliedMigrationEntries)))
+                    {
+                        migrationsToRevert = appliedMigrations
+                            .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) > 0)
+                            .OrderByDescending(m => m.Key)
+                            .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
+                            .ToList();
+                        _logger.Logger.LogInformation(
+                            $"{nameof(PopulateMigrations)}:{nameof(migrationsToRevert)}='{{0}}'", string.Join(',', migrationsToRevert));
 
+                    }
+
+                    actualTargetMigration = appliedMigrations
+                        .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) == 0)
+                        .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
+                        .SingleOrDefault();
                 }
 
-                actualTargetMigration = appliedMigrations
-                    .Where(m => string.Compare(m.Key, targetMigration, StringComparison.OrdinalIgnoreCase) == 0)
-                    .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
-                    .SingleOrDefault();
-            }
-        }
+            }        }
 
         /// <summary>
         ///     This is an internal API that supports the Entity Framework Core infrastructure and not subject to
